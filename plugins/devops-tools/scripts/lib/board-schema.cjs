@@ -13903,7 +13903,15 @@ var boardShape = external_exports.object({
   project: external_exports.object({
     name: external_exports.string().min(1),
     /** Repo-relative directory the `.tf` files were read from, e.g. `infra`. */
-    terraformRoot: external_exports.string().min(1)
+    terraformRoot: external_exports.string().min(1),
+    /**
+     * Which real, independently-deployed environment this board describes — a separate root
+     * module (`prod`, `staging`) or a `-var-file` selection against a shared root
+     * (`bxl-dev`, `transfert-prod`). Only meaningful when a project has more than one board, laid
+     * out as `.claude/devops-tools/<id>.json`; the loader uses the filename as the id and this
+     * field as the human label. Absent for the common single-board project.
+     */
+    environment: external_exports.string().min(1).optional()
   }),
   provider: external_exports.object({
     region: external_exports.string().optional(),

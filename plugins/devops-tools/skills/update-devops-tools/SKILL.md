@@ -27,19 +27,28 @@ $ARGUMENTS
 Read `${CLAUDE_PLUGIN_ROOT}/reference/schema.md` in full — the field list, the folding tables, the
 containment rules.
 
-**If `.claude/devops-tools.json` does not exist**, run `/devops-tools:init-devops-tools` instead.
+**If neither `.claude/devops-tools.json` nor `.claude/devops-tools/` exists**, run
+`/devops-tools:init-devops-tools` instead.
+
+**If the project now has more than one environment and only the single file exists** (or vice
+versa), see [Migrating the layout](#migrating-the-layout) below before doing anything else.
 
 ## Workflow
 
+Everything below describes updating **one** board. Run it once per file when the project has more
+than one environment (`.claude/devops-tools/<id>.json` for each) — each is independent, so a
+change to `bxl-dev`'s tfvars only touches `bxl-dev.json`.
+
 ### 1. Read the existing board, then the Terraform
 
-Read `.claude/devops-tools.json` first, so you know what the previous pass decided before the
-Terraform can bias you. Then read every `.tf` under `project.terraformRoot`, plus any local module
-it calls.
+Read the board first, so you know what the previous pass decided before the Terraform can bias
+you. Then read every `.tf` under `project.terraformRoot`, plus any local module it calls.
 
 If the Terraform has moved since the board was written, find it and update `project.terraformRoot`.
 
-**Do not read `terraform.tfstate`, `*.tfvars`, or `.env`.**
+**Do not read `terraform.tfstate`, `*.tfvars`, or `.env`.** If a shared-root project's environments
+changed which flags they enable, ask the user rather than reading the tfvars — same rule as
+`init`, see `reference/schema.md`'s "Multiple environments" section.
 
 If the board fails to parse at all — the app reported it invalid, or `JSON.parse` throws — say so,
 and rebuild from the Terraform following `init-devops-tools`'s workflow. Salvage any `notes` and
@@ -75,8 +84,8 @@ Some properties are derived rather than declared, and a change elsewhere silentl
 ### 4. Lay out and validate
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/layout-board.mjs" .claude/devops-tools.json
-node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-board.mjs" .claude/devops-tools.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/layout-board.mjs" <path>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-board.mjs" <path>
 ```
 
 Layout is a pure function of the graph, so you do not carry positions forward and you should not
@@ -98,3 +107,21 @@ The user already knows what their architecture looks like. What they want from y
 - `git diff --stat .claude/devops-tools.json`, so they can see the size of the change.
 
 If nothing changed, say exactly that and confirm the diff is empty.
+
+## Migrating the layout
+
+A project can move between "one environment" and "several" over time. Handle it explicitly rather
+than silently:
+
+- **A second environment just appeared** (a new `*.tfvars` file, or a new root module) and the
+  project still has a single `.claude/devops-tools.json`: tell the user, confirm you should switch
+  to `.claude/devops-tools/<id>.json` per environment, build each board following
+  `init-devops-tools`'s workflow (carrying forward whatever the existing single file already got
+  right for the environment it matches), and ask before deleting the old single file — leaving
+  both around gives the app two disagreeing sources for one project.
+- **Down to one environment** (environments merged, or all but one root module removed): confirm
+  with the user, write the single `.claude/devops-tools.json`, and ask before removing the
+  `.claude/devops-tools/` directory.
+
+Never do this migration silently as a side effect of an unrelated update — it changes where the
+board lives, which is a bigger change than the diff it usually produces.

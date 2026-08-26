@@ -4,8 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BOARD_DIR_RELATIVE_PATH,
   BOARD_RELATIVE_PATH,
   boardPathFor,
+  listBoards,
   loadBoard,
   looksLikeTerraformProject,
 } from "../src/core/board-loader.js";
@@ -72,6 +74,71 @@ describe("loadBoard", () => {
     expect(
       loadBoard(path.join(os.tmpdir(), "devops-tools-does-not-exist")).status,
     ).toBe("missing");
+  });
+});
+
+describe("multiple environments", () => {
+  function fixtureWithEnvironment(environment: string): string {
+    const board = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+    board.project.environment = environment;
+    return JSON.stringify(board);
+  }
+
+  it("lists no boards for a project with only the single-board file", () => {
+    const root = project({
+      [BOARD_RELATIVE_PATH]: fs.readFileSync(fixturePath, "utf8"),
+    });
+    expect(listBoards(root)).toEqual([]);
+  });
+
+  it("lists no boards for a project with neither layout", () => {
+    expect(listBoards(project({ "infra/main.tf": "" }))).toEqual([]);
+  });
+
+  it("discovers every environment under the boards directory, sorted by id", () => {
+    const dir = path.join(BOARD_DIR_RELATIVE_PATH);
+    const root = project({
+      [path.join(dir, "transfert-prod.json")]:
+        fixtureWithEnvironment("transfert-prod"),
+      [path.join(dir, "bxl-dev.json")]: fixtureWithEnvironment("bxl-dev"),
+    });
+    const boards = listBoards(root);
+    expect(boards.map((b) => b.id)).toEqual(["bxl-dev", "transfert-prod"]);
+    expect(boards.map((b) => b.label)).toEqual(["bxl-dev", "transfert-prod"]);
+    expect(boards[0].relativePath).toBe(path.join(dir, "bxl-dev.json"));
+  });
+
+  it("falls back to the id as the label when a board sets no project.environment", () => {
+    const dir = path.join(BOARD_DIR_RELATIVE_PATH);
+    const root = project({
+      [path.join(dir, "staging.json")]: fs.readFileSync(fixturePath, "utf8"),
+    });
+    expect(listBoards(root)[0]).toMatchObject({
+      id: "staging",
+      label: "staging",
+    });
+  });
+
+  it("loadBoard reads a specific environment by id", () => {
+    const dir = path.join(BOARD_DIR_RELATIVE_PATH);
+    const root = project({
+      [path.join(dir, "bxl-dev.json")]: fixtureWithEnvironment("bxl-dev"),
+    });
+    const result = loadBoard(root, "bxl-dev");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.board.project.environment).toBe("bxl-dev");
+    expect(result.boardPath).toBe(boardPathFor(root, "bxl-dev"));
+  });
+
+  it("reports a missing environment id as missing, naming that file", () => {
+    const root = project({ "infra/main.tf": "" });
+    const result = loadBoard(root, "nope");
+    expect(result.status).toBe("missing");
+    if (result.status !== "missing") return;
+    expect(result.boardRelativePath).toBe(
+      path.join(BOARD_DIR_RELATIVE_PATH, "nope.json"),
+    );
   });
 });
 

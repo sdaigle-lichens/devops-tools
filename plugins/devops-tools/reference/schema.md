@@ -25,6 +25,31 @@ where the two disagree, the schema wins.
 }
 ```
 
+## Where the file lives
+
+Most projects have one architecture and one file: `.claude/devops-tools.json`.
+
+A project with **more than one real, independently-deployed environment** — a separate root
+module (`infra/prod`, `infra/staging`), or one root module applied with different `-var-file`s
+that enable different resources — gets one complete board per environment instead, at
+`.claude/devops-tools/<id>.json`. `<id>` is whatever name distinguishes the environments (the
+tfvars filename minus its extension, or the root module's directory name); it becomes the id the
+app's environment picker uses, and `project.environment` (below) becomes its label.
+
+**Never merge environments into one board.** A board is supposed to describe one real, deployable
+architecture. A file that draws every resource any environment might enable — Qdrant *and* Mongo
+*and* a module some environments never turn on — describes a deployment that has never actually
+existed. See [Multiple environments](#multiple-environments) below for how to tell the two layouts
+apart and which one to write.
+
+### `project`
+
+| field | required | notes |
+|---|---|---|
+| `name` | ✅ | |
+| `terraformRoot` | ✅ | Repo-relative directory the `.tf` files were read from. |
+| `environment` | | Set only when the project has more than one board (see above). The human label for this one — `bxl-dev`, `transfert-prod`, `prod`. Omit for the common single-board project. |
+
 ### `nodes[]`
 
 | field | required | notes |
@@ -143,7 +168,45 @@ guessing is worse than not knowing. Write the reference through as-is (`"${var.v
 separate attribute (`"cidr_block_default": "10.0.0.0/16"`), clearly labelled.
 
 **Never read `terraform.tfstate`, `*.tfvars`, or `.env`.** State files contain resolved secrets,
-and this file gets committed.
+and this file gets committed. This rule has no exception for a value that looks harmless — a
+boolean feature flag lives in the same file as a database password, and a partial read is much
+harder to audit than an absolute one.
+
+## Multiple environments
+
+A project has more than one real environment in either of two shapes:
+
+- **Separate root modules.** `infra/prod` and `infra/staging` (or similar) are independent
+  Terraform configurations. Each gets its own board, mapped independently.
+- **One root, several `-var-file`s.** A single root module applied with `terraform/env/*.tfvars`
+  or equivalent, where the tfvars files select different resources into existence — a
+  `count = var.qdrant_enable ? 1 : 0` that is on in one environment and off in another. The
+  filenames alone are not read-only-safe to infer values from; the environments exist and their
+  *names* are visible from the filenames, but what each one turns on or off is not, since that
+  lives inside the file this skill never opens.
+
+**Detecting which shape applies:**
+
+- More than one directory that independently looks like a Terraform root (its own provider
+  configuration, not just a module called by another root) → separate roots.
+  Ask which environment to map (`init`) or work out which board file corresponds to which (`update`).
+- A single root plus a directory of `*.tfvars` files (`terraform/env/`, `environments/`, or
+  similar) → shared root, `-var-file` environments. Read the **filenames** to learn the
+  environment names — that is not a "resolved secret," it is a directory listing. Do not open the
+  files.
+
+**Building a board per shared-root environment without reading tfvars:** find every place a
+resource's existence or count depends on a variable (`count = var.x_enable ? 1 : 0`,
+`for_each = var.y_enable ? {...} : {}`) by reading the `.tf` source, not the tfvars. Then **ask the
+user** which environments enable which of those flags, rather than inferring it — a direct
+question keeps the "never open a tfvars file" rule absolute instead of turning it into "except for
+these lines," which is much harder for someone auditing this skill's behaviour later to trust.
+Build one graph per environment from the answers, and write each to its own
+`.claude/devops-tools/<id>.json`.
+
+If a project is migrating from a single `.claude/devops-tools.json` to this layout because a
+second environment just appeared, say so explicitly and ask before removing the old single file —
+leaving both around means the app has two disagreeing sources for the same project.
 
 ## Containers to build
 

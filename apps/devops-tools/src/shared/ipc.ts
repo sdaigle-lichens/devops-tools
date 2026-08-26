@@ -33,13 +33,41 @@ export interface ProjectState {
 }
 
 /**
+ * One environment's board, when a project has more than one — a separate root module (`prod`,
+ * `staging`) or a `-var-file` selection against a shared root (`bxl-dev`, `transfert-prod`).
+ * `id` is the filename under `.claude/devops-tools/` minus `.json`, stable across reloads and safe
+ * to round-trip back through `board.load`. `label` is `project.environment` when the board sets
+ * it, else `id`.
+ */
+export interface BoardRef {
+  id: string;
+  relativePath: string;
+  label: string;
+}
+
+/**
  * The renderer's view of a board read attempt. Mirrors core's `BoardLoadResult` minus the
  * absolute `boardPath`, which the renderer gets as a display string only.
+ *
+ * `boards` lists every environment discovered for the project, empty for the common case of a
+ * single `.claude/devops-tools.json` with no sibling environments — the renderer shows no picker
+ * when it is empty. `activeBoardId` names which one `board` is, or null in the single-board case.
  */
 export type BoardView =
-  | { status: "ok"; board: Board; boardRelativePath: string }
-  | { status: "missing"; boardRelativePath: string }
-  | { status: "invalid"; errors: string[]; boardRelativePath: string };
+  | {
+      status: "ok";
+      board: Board;
+      boardRelativePath: string;
+      boards: BoardRef[];
+      activeBoardId: string | null;
+    }
+  | { status: "missing"; boardRelativePath: string; boards: BoardRef[] }
+  | {
+      status: "invalid";
+      errors: string[];
+      boardRelativePath: string;
+      boards: BoardRef[];
+    };
 
 /** Request → response channels. */
 export const IPC = {
@@ -68,7 +96,11 @@ export interface DevopsToolsApi {
     onChanged(cb: (state: ProjectState) => void): () => void;
   };
   board: {
-    load(root: string): Promise<BoardView>;
+    /**
+     * `boardId` selects one of `BoardView.boards` — omit it to get the current selection (main
+     * remembers it per project) or, on first load, the first environment discovered.
+     */
+    load(root: string, boardId?: string): Promise<BoardView>;
     /**
      * Fires when the open project's board file changes on disk — which is what happens when the
      * user runs the update skill in a Claude session with this window open. The payload is the

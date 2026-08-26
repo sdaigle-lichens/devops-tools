@@ -75,9 +75,16 @@ Both scale-driven. The 18-node fixture does not need them; a real production acc
 
 ## 4. Robustness
 
-- **Multi-environment.** One board per repo, at a hardcoded path. A repo with `infra/prod` and
-  `infra/staging` cannot have two, and the init skill currently asks the user to pick one. Needs a
-  board-per-root story before it meets a real monorepo.
+- ~~**Multi-environment.**~~ Done. `.claude/devops-tools/<id>.json` holds one board per real
+  environment — separate root modules, or `-var-file` selections against a shared root — with
+  `project.environment` as the label; the app shows a tab picker when a project has more than one.
+  Verified against `~/gits/bxl-racinette` (118 nodes, one shared root, three tfvars environments
+  that enable different modules) and probed end-to-end in a real window: tabs render, switching
+  updates the canvas and the URL, no reload. The skills' side of this — detecting a project's
+  environments and building each board from `.tf` conditionals without ever opening a `.tfvars`
+  file — is written into `SKILL.md`/`reference/schema.md` but hasn't been run against a real
+  multi-env repo yet; that's the next thing to verify end to end, the same way this file's own
+  first bullet was.
 - **`schemaVersion` has no migration path.** It is `z.literal(1)`, so a v2 board is simply refused.
   Fine today, since the only boards in the world are ours — but the migration story has to exist
   before the first breaking change, or every committed board in every repo breaks at once.

@@ -8,34 +8,60 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseBoard, type Board } from "./board-schema.js";
+import type { BoardRef } from "../shared/ipc.js";
 
-/** Where a board lives inside a project. Relative, POSIX — joined onto the project root. */
+/** Where a project's single board lives. Relative, POSIX — joined onto the project root. */
 export const BOARD_RELATIVE_PATH = path.join(".claude", "devops-tools.json");
 
-export type BoardLoadResult =
-  | { status: "ok"; board: Board; boardPath: string }
-  | { status: "missing"; boardPath: string }
-  | { status: "invalid"; errors: string[]; boardPath: string };
+/**
+ * Where a project's per-environment boards live, when it has more than one — a separate root
+ * module or a `-var-file` selection against a shared root. Each `<id>.json` inside is a complete,
+ * independent board; nothing here merges them. Most projects never populate this directory and
+ * keep the single `BOARD_RELATIVE_PATH` file instead — `listBoards` returns `[]` for them.
+ */
+export const BOARD_DIR_RELATIVE_PATH = path.join(".claude", "devops-tools");
 
-export function boardPathFor(projectRoot: string): string {
-  return path.join(projectRoot, BOARD_RELATIVE_PATH);
+export type BoardLoadResult =
+  | { status: "ok"; board: Board; boardPath: string; boardRelativePath: string }
+  | { status: "missing"; boardPath: string; boardRelativePath: string }
+  | {
+      status: "invalid";
+      errors: string[];
+      boardPath: string;
+      boardRelativePath: string;
+    };
+
+function relativePathFor(boardId?: string): string {
+  return boardId
+    ? path.join(BOARD_DIR_RELATIVE_PATH, `${boardId}.json`)
+    : BOARD_RELATIVE_PATH;
 }
 
-export function loadBoard(projectRoot: string): BoardLoadResult {
-  const boardPath = boardPathFor(projectRoot);
+/** `boardId` selects a file under `BOARD_DIR_RELATIVE_PATH`; omit it for the single-board path. */
+export function boardPathFor(projectRoot: string, boardId?: string): string {
+  return path.join(projectRoot, relativePathFor(boardId));
+}
+
+export function loadBoard(
+  projectRoot: string,
+  boardId?: string,
+): BoardLoadResult {
+  const boardPath = boardPathFor(projectRoot, boardId);
+  const boardRelativePath = relativePathFor(boardId);
 
   let raw: string;
   try {
     raw = fs.readFileSync(boardPath, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT")
-      return { status: "missing", boardPath };
+      return { status: "missing", boardPath, boardRelativePath };
     // EACCES, EISDIR and friends are real problems the user can act on, so they are reported as
     // an invalid board rather than quietly folded into "missing" and shown as "run the skill".
     return {
       status: "invalid",
       errors: [`could not read ${boardPath}: ${(err as Error).message}`],
       boardPath,
+      boardRelativePath,
     };
   }
 
@@ -46,16 +72,49 @@ export function loadBoard(projectRoot: string): BoardLoadResult {
     return {
       status: "invalid",
       errors: [
-        `${BOARD_RELATIVE_PATH} is not valid JSON: ${(err as Error).message}`,
+        `${boardRelativePath} is not valid JSON: ${(err as Error).message}`,
       ],
       boardPath,
+      boardRelativePath,
     };
   }
 
   const parsed = parseBoard(data);
   return parsed.ok
-    ? { status: "ok", board: parsed.board, boardPath }
-    : { status: "invalid", errors: parsed.errors, boardPath };
+    ? { status: "ok", board: parsed.board, boardPath, boardRelativePath }
+    : {
+        status: "invalid",
+        errors: parsed.errors,
+        boardPath,
+        boardRelativePath,
+      };
+}
+
+/**
+ * Every environment discovered for a project, sorted by id. `[]` for the common case — no
+ * `BOARD_DIR_RELATIVE_PATH` directory at all — which is how a caller tells "one board" from
+ * "several" without a second flag.
+ */
+export function listBoards(projectRoot: string): BoardRef[] {
+  const dir = path.join(projectRoot, BOARD_DIR_RELATIVE_PATH);
+  let names: string[];
+  try {
+    names = fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+
+  return names.map((name) => {
+    const id = name.slice(0, -".json".length);
+    const result = loadBoard(projectRoot, id);
+    const label =
+      result.status === "ok" ? (result.board.project.environment ?? id) : id;
+    return { id, relativePath: relativePathFor(id), label };
+  });
 }
 
 /**

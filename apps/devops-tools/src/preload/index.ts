@@ -24,7 +24,8 @@ const api: DevopsToolsApi = {
     onChanged: (cb) => subscribe<ProjectState>(IPC_EVENTS.projectChanged, cb),
   },
   board: {
-    load: (root: string) => ipcRenderer.invoke(IPC.boardLoad, root),
+    load: (root: string, boardId?: string) =>
+      ipcRenderer.invoke(IPC.boardLoad, root, boardId),
     onChanged: (cb) => subscribe<BoardView>(IPC_EVENTS.boardChanged, cb),
   },
   shell: {

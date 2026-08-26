@@ -8,6 +8,7 @@ import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "node:path";
 import {
   BOARD_RELATIVE_PATH,
+  listBoards,
   loadBoard,
   type BoardLoadResult,
 } from "../core/board-loader.js";
@@ -21,6 +22,7 @@ import {
 import {
   IPC,
   IPC_EVENTS,
+  type BoardRef,
   type BoardView,
   type ProjectState,
 } from "../shared/ipc.js";
@@ -30,17 +32,69 @@ function broadcast(channel: string, payload: unknown): void {
     win.webContents.send(channel, payload);
 }
 
+/**
+ * Which environment's board is loaded for the current project — there is one live window group
+ * per project the same way `project-store`'s "current" is singular, so one module-level id is
+ * enough. Reset whenever the project changes; kept as long as it names a board that still exists.
+ */
+let activeBoardId: string | null = null;
+
 /** Strip the absolute path before a result crosses to the renderer — it only ever displays it. */
-function toView(result: BoardLoadResult): BoardView {
-  const boardRelativePath = BOARD_RELATIVE_PATH;
+function toView(result: BoardLoadResult, boards: BoardRef[]): BoardView {
   switch (result.status) {
     case "ok":
-      return { status: "ok", board: result.board, boardRelativePath };
+      return {
+        status: "ok",
+        board: result.board,
+        boardRelativePath: result.boardRelativePath,
+        boards,
+        activeBoardId,
+      };
     case "missing":
-      return { status: "missing", boardRelativePath };
+      return {
+        status: "missing",
+        boardRelativePath: result.boardRelativePath,
+        boards,
+      };
     case "invalid":
-      return { status: "invalid", errors: result.errors, boardRelativePath };
+      return {
+        status: "invalid",
+        errors: result.errors,
+        boardRelativePath: result.boardRelativePath,
+        boards,
+      };
   }
+}
+
+/**
+ * Load whichever environment is active for a project, choosing a default the first time one is
+ * needed and falling back to the first environment left when the active one disappears (e.g. a
+ * skill run renamed or removed it). `requestedBoardId` is honoured only when it names a board
+ * `listBoards` actually found — never trusted blindly, since it ends up in a file path.
+ */
+function loadActive(
+  projectRoot: string | null,
+  requestedBoardId?: string,
+): BoardView {
+  if (!projectRoot) {
+    activeBoardId = null;
+    return {
+      status: "missing",
+      boardRelativePath: BOARD_RELATIVE_PATH,
+      boards: [],
+    };
+  }
+
+  const boards = listBoards(projectRoot);
+  if (requestedBoardId && boards.some((b) => b.id === requestedBoardId)) {
+    activeBoardId = requestedBoardId;
+  } else if (boards.length === 0) {
+    activeBoardId = null;
+  } else if (!boards.some((b) => b.id === activeBoardId)) {
+    activeBoardId = boards[0].id;
+  }
+
+  return toView(loadBoard(projectRoot, activeBoardId ?? undefined), boards);
 }
 
 /**
@@ -48,9 +102,9 @@ function toView(result: BoardLoadResult): BoardView {
  * window is watching is always the project that window is showing.
  */
 function announce(state: ProjectState): ProjectState {
-  watchBoard(state.current?.root ?? null, (result) =>
-    broadcast(IPC_EVENTS.boardChanged, toView(result)),
-  );
+  activeBoardId = null; // a new project picks its own default environment
+  const root = state.current?.root ?? null;
+  watchBoard(root, () => broadcast(IPC_EVENTS.boardChanged, loadActive(root)));
   broadcast(IPC_EVENTS.projectChanged, state);
   return state;
 }
@@ -76,12 +130,11 @@ export function registerIpc(): void {
     announce(forgetProject(root)),
   );
 
-  ipcMain.handle(IPC.boardLoad, (_e, root: string): BoardView => {
-    const projectRoot = resolveProjectRoot(root);
-    if (!projectRoot)
-      return { status: "missing", boardRelativePath: BOARD_RELATIVE_PATH };
-    return toView(loadBoard(projectRoot));
-  });
+  ipcMain.handle(
+    IPC.boardLoad,
+    (_e, root: string, boardId?: string): BoardView =>
+      loadActive(resolveProjectRoot(root) || null, boardId),
+  );
 
   ipcMain.handle(IPC.revealInFolder, (_e, relativePath: string): void => {
     const projectRoot = resolveProjectRoot();
