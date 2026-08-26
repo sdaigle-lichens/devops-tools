@@ -1,0 +1,12 @@
+{
+  "name": "devops-tools",
+  "version": "0.1.0",
+  "description": "Reads a project's Terraform and writes .claude/devops-tools.json — the committed, versioned model of its AWS architecture that the DevOps Tools desktop app renders. Ships init-devops-tools (first map) and update-devops-tools (keep it in step with a Terraform change).",
+  "author": {
+    "name": "Samuel Daigle",
+    "email": "daigles@lichens.ai"
+  },
+  "homepage": "https://github.com/sdaigle-lichens/devops-tools",
+  "repository": "https://github.com/sdaigle-lichens/devops-tools",
+  "keywords": ["aws", "terraform", "architecture", "diagram", "visualization"]
+}

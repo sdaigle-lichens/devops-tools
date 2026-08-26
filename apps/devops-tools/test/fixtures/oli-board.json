@@ -1,0 +1,645 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-26T12:00:00Z",
+  "generatedBy": "devops-tools:init-devops-tools",
+  "project": {
+    "name": "oli",
+    "terraformRoot": "infra"
+  },
+  "provider": {
+    "region": "ca-central-1"
+  },
+  "nodes": [
+    {
+      "id": "external.cloudflare",
+      "kind": "external",
+      "label": "Cloudflare edge",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "notes": "Ranges read at plan time from data.cloudflare_ip_ranges.edge, not managed here.",
+      "size": {
+        "width": 168,
+        "height": 44
+      }
+    },
+    {
+      "id": "external.internet",
+      "kind": "external",
+      "label": "Internet",
+      "position": {
+        "x": 0,
+        "y": 68
+      },
+      "size": {
+        "width": 168,
+        "height": 44
+      }
+    },
+    {
+      "id": "aws_s3_bucket.images",
+      "kind": "resource",
+      "resourceType": "aws_s3_bucket",
+      "service": "s3",
+      "label": "images",
+      "position": {
+        "x": 0,
+        "y": 136
+      },
+      "summary": ["versioning", "public_access"],
+      "attributes": {
+        "bucket": "${var.project}-images-${account}-${region}-an",
+        "bucket_namespace": "account-regional",
+        "versioning": "Enabled",
+        "public_access": "fully blocked",
+        "lifecycle": {
+          "expire-noncurrent-versions": {
+            "noncurrent_days": 30,
+            "abort_incomplete_multipart_upload_days": 7
+          }
+        }
+      },
+      "source": {
+        "file": "infra/storage.tf",
+        "line": 16
+      },
+      "notes": "Never public. apps/api serves uploads through an owner-checked route; presigned GET URLs are the access path.",
+      "size": {
+        "width": 180,
+        "height": 92
+      }
+    },
+    {
+      "id": "aws_s3_bucket.backups",
+      "kind": "resource",
+      "resourceType": "aws_s3_bucket",
+      "service": "s3",
+      "label": "backups",
+      "position": {
+        "x": 0,
+        "y": 252
+      },
+      "summary": ["public_access"],
+      "attributes": {
+        "bucket": "${var.project}-backups-${account}-${region}-an",
+        "bucket_namespace": "account-regional",
+        "public_access": "fully blocked"
+      },
+      "source": {
+        "file": "infra/storage.tf"
+      },
+      "size": {
+        "width": 180,
+        "height": 76
+      }
+    },
+    {
+      "id": "aws_ec2_managed_prefix_list.cloudflare_v4",
+      "kind": "resource",
+      "resourceType": "aws_ec2_managed_prefix_list",
+      "service": "vpc",
+      "label": "cloudflare-v4",
+      "position": {
+        "x": 0,
+        "y": 352
+      },
+      "summary": ["address_family"],
+      "attributes": {
+        "address_family": "IPv4",
+        "max_entries": "${var.prefix_list_max_entries}",
+        "entries": "dynamic, from data.cloudflare_ip_ranges.edge.ipv4_cidrs"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 168
+      },
+      "size": {
+        "width": 180,
+        "height": 76
+      }
+    },
+    {
+      "id": "aws_ec2_managed_prefix_list.cloudflare_v6",
+      "kind": "resource",
+      "resourceType": "aws_ec2_managed_prefix_list",
+      "service": "vpc",
+      "label": "cloudflare-v6",
+      "position": {
+        "x": 0,
+        "y": 452
+      },
+      "summary": ["address_family"],
+      "attributes": {
+        "address_family": "IPv6",
+        "max_entries": "${var.prefix_list_max_entries}",
+        "entries": "dynamic, from data.cloudflare_ip_ranges.edge.ipv6_cidrs"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 182
+      },
+      "size": {
+        "width": 180,
+        "height": 76
+      }
+    },
+    {
+      "id": "aws_vpc.main",
+      "kind": "container",
+      "role": "vpc",
+      "resourceType": "aws_vpc",
+      "service": "vpc",
+      "label": "oli-vpc",
+      "position": {
+        "x": 252,
+        "y": 0
+      },
+      "size": {
+        "width": 636,
+        "height": 564
+      },
+      "summary": ["cidr_block"],
+      "attributes": {
+        "cidr_block": "${var.vpc_cidr}",
+        "enable_dns_hostnames": true,
+        "enable_dns_support": true,
+        "assign_generated_ipv6_cidr_block": true
+      },
+      "tags": {
+        "Name": "oli-vpc"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 49
+      }
+    },
+    {
+      "id": "az.a",
+      "kind": "container",
+      "role": "availability_zone",
+      "label": "AZ a",
+      "parentId": "aws_vpc.main",
+      "position": {
+        "x": 24,
+        "y": 34
+      },
+      "size": {
+        "width": 268,
+        "height": 274
+      },
+      "notes": "Names are read from data.aws_availability_zones.available rather than hardcoded, so the concrete AZ is only known at apply time."
+    },
+    {
+      "id": "aws_subnet.this[\"public-a\"]",
+      "kind": "container",
+      "role": "public_subnet",
+      "resourceType": "aws_subnet",
+      "service": "vpc",
+      "label": "public-a",
+      "parentId": "az.a",
+      "position": {
+        "x": 24,
+        "y": 34
+      },
+      "size": {
+        "width": 220,
+        "height": 96
+      },
+      "summary": ["cidr_block"],
+      "attributes": {
+        "cidr_block": "cidrsubnet(vpc, 8, 0)",
+        "map_public_ip_on_launch": true
+      },
+      "tags": {
+        "Name": "oli-public-a",
+        "Tier": "public"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 65
+      }
+    },
+    {
+      "id": "aws_subnet.this[\"private-a\"]",
+      "kind": "container",
+      "role": "private_subnet",
+      "resourceType": "aws_subnet",
+      "service": "vpc",
+      "label": "private-a",
+      "parentId": "az.a",
+      "position": {
+        "x": 24,
+        "y": 154
+      },
+      "size": {
+        "width": 220,
+        "height": 96
+      },
+      "summary": ["cidr_block"],
+      "attributes": {
+        "cidr_block": "cidrsubnet(vpc, 8, 10)",
+        "map_public_ip_on_launch": false
+      },
+      "tags": {
+        "Name": "oli-private-a",
+        "Tier": "private"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 65
+      }
+    },
+    {
+      "id": "az.b",
+      "kind": "container",
+      "role": "availability_zone",
+      "label": "AZ b",
+      "parentId": "aws_vpc.main",
+      "position": {
+        "x": 316,
+        "y": 34
+      },
+      "size": {
+        "width": 268,
+        "height": 274
+      }
+    },
+    {
+      "id": "aws_subnet.this[\"public-b\"]",
+      "kind": "container",
+      "role": "public_subnet",
+      "resourceType": "aws_subnet",
+      "service": "vpc",
+      "label": "public-b",
+      "parentId": "az.b",
+      "position": {
+        "x": 24,
+        "y": 34
+      },
+      "size": {
+        "width": 220,
+        "height": 96
+      },
+      "summary": ["cidr_block"],
+      "attributes": {
+        "cidr_block": "cidrsubnet(vpc, 8, 1)",
+        "map_public_ip_on_launch": true
+      },
+      "tags": {
+        "Name": "oli-public-b",
+        "Tier": "public"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 65
+      }
+    },
+    {
+      "id": "aws_subnet.this[\"private-b\"]",
+      "kind": "container",
+      "role": "private_subnet",
+      "resourceType": "aws_subnet",
+      "service": "vpc",
+      "label": "private-b",
+      "parentId": "az.b",
+      "position": {
+        "x": 24,
+        "y": 154
+      },
+      "size": {
+        "width": 220,
+        "height": 96
+      },
+      "summary": ["cidr_block"],
+      "attributes": {
+        "cidr_block": "cidrsubnet(vpc, 8, 11)",
+        "map_public_ip_on_launch": false
+      },
+      "tags": {
+        "Name": "oli-private-b",
+        "Tier": "private"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 65
+      }
+    },
+    {
+      "id": "aws_internet_gateway.main",
+      "kind": "resource",
+      "resourceType": "aws_internet_gateway",
+      "service": "vpc",
+      "label": "oli-igw",
+      "parentId": "aws_vpc.main",
+      "position": {
+        "x": 24,
+        "y": 332
+      },
+      "tags": {
+        "Name": "oli-igw"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 87
+      },
+      "size": {
+        "width": 180,
+        "height": 60
+      }
+    },
+    {
+      "id": "aws_route_table.public",
+      "kind": "resource",
+      "resourceType": "aws_route_table",
+      "service": "vpc",
+      "label": "public route table",
+      "parentId": "aws_vpc.main",
+      "position": {
+        "x": 228,
+        "y": 332
+      },
+      "summary": ["default_route"],
+      "attributes": {
+        "default_route": "0.0.0.0/0 and ::/0 → igw"
+      },
+      "tags": {
+        "Name": "oli-public"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 92
+      },
+      "size": {
+        "width": 180,
+        "height": 76
+      }
+    },
+    {
+      "id": "aws_route_table.private",
+      "kind": "resource",
+      "resourceType": "aws_route_table",
+      "service": "vpc",
+      "label": "private route table",
+      "parentId": "aws_vpc.main",
+      "position": {
+        "x": 432,
+        "y": 332
+      },
+      "summary": ["default_route"],
+      "attributes": {
+        "default_route": "none"
+      },
+      "tags": {
+        "Name": "oli-private"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 119
+      },
+      "notes": "No 0.0.0.0/0 on purpose — a NAT gateway would cost more than the rest of this stack. Private subnets reach S3 through the gateway endpoint and nothing else.",
+      "size": {
+        "width": 180,
+        "height": 76
+      }
+    },
+    {
+      "id": "aws_vpc_endpoint.s3",
+      "kind": "resource",
+      "resourceType": "aws_vpc_endpoint",
+      "service": "vpc",
+      "label": "s3 gateway endpoint",
+      "parentId": "aws_vpc.main",
+      "position": {
+        "x": 24,
+        "y": 448
+      },
+      "summary": ["vpc_endpoint_type"],
+      "attributes": {
+        "vpc_endpoint_type": "Gateway",
+        "service_name": "com.amazonaws.${var.aws_region}.s3",
+        "route_table_ids": ["aws_route_table.public", "aws_route_table.private"]
+      },
+      "tags": {
+        "Name": "oli-s3-endpoint"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 140
+      },
+      "size": {
+        "width": 180,
+        "height": 76
+      }
+    },
+    {
+      "id": "aws_security_group.web",
+      "kind": "resource",
+      "resourceType": "aws_security_group",
+      "service": "vpc",
+      "label": "oli-web",
+      "parentId": "aws_vpc.main",
+      "position": {
+        "x": 228,
+        "y": 448
+      },
+      "summary": ["ingress", "egress"],
+      "attributes": {
+        "description": "Origin web server. Ingress from Cloudflare edge only; no SSH.",
+        "ingress": [
+          "tcp/80 from cloudflare-v4",
+          "tcp/80 from cloudflare-v6",
+          "tcp/443 from cloudflare-v4",
+          "tcp/443 from cloudflare-v6"
+        ],
+        "egress": ["all protocols to 0.0.0.0/0", "all protocols to ::/0"],
+        "create_before_destroy": true
+      },
+      "tags": {
+        "Name": "oli-web"
+      },
+      "source": {
+        "file": "infra/network.tf",
+        "line": 208
+      },
+      "notes": "No port 22 rule by design — shell access is SSM Session Manager, which is outbound-only.",
+      "size": {
+        "width": 180,
+        "height": 92
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e.igw.internet",
+      "source": "aws_internet_gateway.main",
+      "target": "external.internet",
+      "kind": "traffic"
+    },
+    {
+      "id": "e.rt-public.igw",
+      "source": "aws_route_table.public",
+      "target": "aws_internet_gateway.main",
+      "kind": "route",
+      "label": "0.0.0.0/0, ::/0"
+    },
+    {
+      "id": "e.rt-public.s3",
+      "source": "aws_route_table.public",
+      "target": "aws_vpc_endpoint.s3",
+      "kind": "route",
+      "label": "S3 prefix list"
+    },
+    {
+      "id": "e.rt-private.s3",
+      "source": "aws_route_table.private",
+      "target": "aws_vpc_endpoint.s3",
+      "kind": "route",
+      "label": "S3 prefix list"
+    },
+    {
+      "id": "e.s3ep.images",
+      "source": "aws_vpc_endpoint.s3",
+      "target": "aws_s3_bucket.images",
+      "kind": "traffic"
+    },
+    {
+      "id": "e.s3ep.backups",
+      "source": "aws_vpc_endpoint.s3",
+      "target": "aws_s3_bucket.backups",
+      "kind": "traffic"
+    },
+    {
+      "id": "e.public-a.rt",
+      "source": "aws_subnet.this[\"public-a\"]",
+      "target": "aws_route_table.public",
+      "kind": "association"
+    },
+    {
+      "id": "e.public-b.rt",
+      "source": "aws_subnet.this[\"public-b\"]",
+      "target": "aws_route_table.public",
+      "kind": "association"
+    },
+    {
+      "id": "e.private-a.rt",
+      "source": "aws_subnet.this[\"private-a\"]",
+      "target": "aws_route_table.private",
+      "kind": "association"
+    },
+    {
+      "id": "e.private-b.rt",
+      "source": "aws_subnet.this[\"private-b\"]",
+      "target": "aws_route_table.private",
+      "kind": "association"
+    },
+    {
+      "id": "e.sg.pl4",
+      "source": "aws_security_group.web",
+      "target": "aws_ec2_managed_prefix_list.cloudflare_v4",
+      "kind": "reference",
+      "label": "tcp/80, tcp/443"
+    },
+    {
+      "id": "e.sg.pl6",
+      "source": "aws_security_group.web",
+      "target": "aws_ec2_managed_prefix_list.cloudflare_v6",
+      "kind": "reference",
+      "label": "tcp/80, tcp/443"
+    },
+    {
+      "id": "e.cf.sg",
+      "source": "external.cloudflare",
+      "target": "aws_security_group.web",
+      "kind": "traffic",
+      "label": "HTTP/HTTPS"
+    }
+  ],
+  "folded": [
+    {
+      "address": "aws_s3_bucket_public_access_block.images",
+      "into": "aws_s3_bucket.images",
+      "reason": "configuration of the parent bucket"
+    },
+    {
+      "address": "aws_s3_bucket_versioning.images",
+      "into": "aws_s3_bucket.images",
+      "reason": "configuration of the parent bucket"
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.images",
+      "into": "aws_s3_bucket.images",
+      "reason": "configuration of the parent bucket"
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.backups",
+      "into": "aws_s3_bucket.backups",
+      "reason": "configuration of the parent bucket"
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.backups",
+      "into": "aws_s3_bucket.backups",
+      "reason": "configuration of the parent bucket"
+    },
+    {
+      "address": "aws_route.public_ipv4",
+      "into": "aws_route_table.public",
+      "reason": "became the e.rt-public.igw edge"
+    },
+    {
+      "address": "aws_route.public_ipv6",
+      "into": "aws_route_table.public",
+      "reason": "became the e.rt-public.igw edge"
+    },
+    {
+      "address": "aws_route_table_association.this",
+      "into": null,
+      "reason": "became the four subnet → route table association edges"
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.http_v4",
+      "into": "aws_security_group.web",
+      "reason": "rule of the parent security group"
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.http_v6",
+      "into": "aws_security_group.web",
+      "reason": "rule of the parent security group"
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.https_v4",
+      "into": "aws_security_group.web",
+      "reason": "rule of the parent security group"
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.https_v6",
+      "into": "aws_security_group.web",
+      "reason": "rule of the parent security group"
+    },
+    {
+      "address": "aws_vpc_security_group_egress_rule.all_v4",
+      "into": "aws_security_group.web",
+      "reason": "rule of the parent security group"
+    },
+    {
+      "address": "aws_vpc_security_group_egress_rule.all_v6",
+      "into": "aws_security_group.web",
+      "reason": "rule of the parent security group"
+    },
+    {
+      "address": "data.aws_availability_zones.available",
+      "into": "aws_vpc.main",
+      "reason": "data source; supplies the AZ names"
+    },
+    {
+      "address": "data.aws_caller_identity.current",
+      "into": null,
+      "reason": "data source; only used to build bucket names"
+    },
+    {
+      "address": "data.cloudflare_ip_ranges.edge",
+      "into": "external.cloudflare",
+      "reason": "data source; describes the external actor"
+    }
+  ]
+}

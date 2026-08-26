@@ -1,0 +1,9 @@
+@import "@repo/styles/shared-styles.css";
+@import "@xyflow/react/dist/style.css";
+
+/*
+ * Tailwind v4 scans the files it is imported from, and this app's components live outside the
+ * package that owns the theme. Without this the utilities used in src/renderer/src are never
+ * generated and the whole UI comes out unstyled.
+ */
+@source "./";

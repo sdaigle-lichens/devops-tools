@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 is configured in CSS, not in a tailwind.config.js — there is no config file in this
+ * repo and there should not be one.
+ *
+ * The renderer's CSP is `default-src 'self'` with no font host, so there is no @import of a web
+ * font here and there must not be one: it would fail silently and fall back anyway. The stack
+ * below is the OS UI font on each platform, which costs nothing to load and looks native.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas,
+    monospace;
+}
+
+/*
+ * Semantic tokens, light first, redefined for dark. Components reference these through Tailwind's
+ * arbitrary-value syntax — `bg-(--bg)`, `border-(--line)` — rather than naming a raw colour, so a
+ * theme change is one edit here.
+ */
+:root {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f1f2f4;
+  --line: #dcdee3;
+  --line-strong: #c2c6cf;
+  --ink: #15171c;
+  --ink-2: #5c6270;
+  --ink-3: #878d9b;
+  --accent: #4f46e5;
+  --accent-ink: #ffffff;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+}
+
+.dark {
+  --bg: #0b0b0c;
+  --surface: #151619;
+  --surface-2: #1d1f24;
+  --line: #2a2d34;
+  --line-strong: #3b3f48;
+  --ink: #eceef2;
+  --ink-2: #a2a8b5;
+  --ink-3: #6f7684;
+  --accent: #8b85ff;
+  --accent-ink: #12121a;
+  --danger: #ff8a80;
+  --danger-bg: #2a1614;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/*
+ * React Flow ships its own light/dark variables and reads the `colorMode` prop, but its default
+ * canvas background is not our `--bg`. Aligning them here keeps the canvas from sitting on a
+ * slightly different grey than the panels beside it.
+ */
+.react-flow {
+  --xy-background-color: var(--bg);
+}

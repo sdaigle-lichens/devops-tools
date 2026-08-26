@@ -1,0 +1,14 @@
+{
+  "name": "@repo/styles",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "check": "prettier --check . --ignore-path ../../.prettierignore"
+  },
+  "exports": {
+    "./shared-styles.css": "./shared-styles.css"
+  },
+  "dependencies": {
+    "tailwindcss": "4.1.18"
+  }
+}

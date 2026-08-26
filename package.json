@@ -1,0 +1,18 @@
+{
+  "name": "devops-tools-repo",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "check": "turbo run check",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "verify": "turbo run check typecheck test",
+    "format": "prettier --write . --ignore-path .prettierignore"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "turbo": "latest"
+  }
+}

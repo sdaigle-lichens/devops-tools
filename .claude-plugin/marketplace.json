@@ -1,0 +1,18 @@
+{
+  "name": "devops-tools",
+  "owner": {
+    "name": "Samuel Daigle",
+    "email": "daigles@lichens.ai"
+  },
+  "metadata": {
+    "description": "Marketplace for the DevOps Tools plugin — the skills that turn a Terraform project's AWS resources into the architecture diagram the DevOps Tools desktop app renders.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "devops-tools",
+      "source": "./plugins/devops-tools",
+      "description": "Generate and maintain .claude/devops-tools.json, the committed AWS architecture model the DevOps Tools desktop app draws."
+    }
+  ]
+}

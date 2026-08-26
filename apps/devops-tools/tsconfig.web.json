@@ -1,0 +1,23 @@
+{
+  "extends": "@repo/typescript-config/react.json",
+  "include": [
+    "src/renderer/src/**/*",
+    "src/preload/index.d.ts",
+    "src/shared/**/*",
+    // The renderer-safe surface of src/core, listed one file at a time on purpose. board-loader.ts
+    // imports node:fs; naming the modules that do not is how this project stays unable to compile
+    // a renderer that reached for one. Kept in step with RENDERER_SAFE in test/isolation.test.ts,
+    // which fails on the import rather than the type.
+    "src/core/board-schema.ts",
+    "src/core/board-to-flow.ts",
+    "src/core/aws-visuals.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler"
+  }
+}

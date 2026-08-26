@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  # electron's postinstall downloads the platform binary; without this the app cannot launch.
+  electron: true
+  # scripts/build-plugin-libs.mjs bundles the board schema down to CJS for the plugin's
+  # standalone validator; esbuild's postinstall fetches the platform binary that needs.
+  esbuild: true
