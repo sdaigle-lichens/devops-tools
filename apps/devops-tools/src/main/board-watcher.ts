@@ -7,6 +7,15 @@
 // `fs.watch` on the FILE, not the directory, would stop working the moment an editor or a skill
 // replaces it via write-to-temp-then-rename — the watch follows the old inode. So the watch is on
 // `.claude/`, filtered by name. That directory is small and quiet, which is why this is affordable.
+//
+// A project that has never run the init skill has no `.claude/` yet, and `fs.watch` throws on a
+// path that does not exist. That is exactly the primary onboarding path — open an unmapped
+// project, run the init skill, the board should just appear — so falling back to "nothing to
+// watch" is not acceptable. Instead the watch falls back to the project ROOT, filtered to the
+// single entry named `.claude`, and hands off to the directory watch the moment that entry shows
+// up. The root is not watched recursively (recursive `fs.watch` is not available on Linux), so
+// this costs one extra inotify handle on the project root until init runs, not a directory tree
+// walk.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -32,6 +41,54 @@ function clearTimer(): void {
 }
 
 /**
+ * Try to watch `<projectRoot>/.claude/` directly. Returns whether it succeeded — the caller falls
+ * back to watching the root when it did not.
+ */
+function startDirectoryWatch(
+  projectRoot: string,
+  onChange: (result: BoardLoadResult) => void,
+): boolean {
+  const dir = path.join(projectRoot, BOARD_DIRNAME);
+  try {
+    const dirWatcher = fs.watch(dir, (_event, filename) => {
+      // A rename event can arrive with a null filename on some platforms; treating that as a hit
+      // costs one wasted read and is the difference between a watcher that works everywhere and
+      // one that works on Linux.
+      if (filename && filename !== BOARD_BASENAME) return;
+      clearTimer();
+      timer = setTimeout(() => {
+        timer = null;
+        if (watchedRoot === projectRoot) onChange(loadBoard(projectRoot));
+      }, DEBOUNCE_MS);
+    });
+    watcher?.close();
+    watcher = dirWatcher;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** No `.claude/` yet — watch the root for it to appear, then hand off to the directory watch. */
+function startRootWatch(
+  projectRoot: string,
+  onChange: (result: BoardLoadResult) => void,
+): void {
+  try {
+    watcher = fs.watch(projectRoot, (_event, filename) => {
+      if (filename && filename !== BOARD_DIRNAME) return;
+      if (watchedRoot !== projectRoot) return;
+      // Might still fail (e.g. the entry was something else briefly named `.claude`, or the
+      // create event fired before the directory was fully in place) — the root watch stays live
+      // either way, since `startDirectoryWatch` only replaces `watcher` on success.
+      startDirectoryWatch(projectRoot, onChange);
+    });
+  } catch {
+    watcher = null;
+  }
+}
+
+/**
  * Point the watcher at a project, replacing whatever it was watching. Pass null to stop.
  * `onChange` fires with a fresh read, debounced — a single save often produces several events.
  */
@@ -42,26 +99,9 @@ export function watchBoard(
   stopWatchingBoard();
   if (!projectRoot) return;
 
-  const dir = path.join(projectRoot, BOARD_DIRNAME);
   watchedRoot = projectRoot;
-
-  try {
-    watcher = fs.watch(dir, (_event, filename) => {
-      // A rename event can arrive with a null filename on some platforms; treating that as a hit
-      // costs one wasted read and is the difference between a watcher that works everywhere and
-      // one that works on Linux.
-      if (filename && filename !== BOARD_BASENAME) return;
-      clearTimer();
-      timer = setTimeout(() => {
-        timer = null;
-        if (watchedRoot) onChange(loadBoard(watchedRoot));
-      }, DEBOUNCE_MS);
-    });
-  } catch {
-    // No `.claude/` yet is the normal state for a project that has never run the init skill.
-    // There is nothing to watch and nothing to report — the user will reopen the project after
-    // running it, and the load path handles the rest.
-    watcher = null;
+  if (!startDirectoryWatch(projectRoot, onChange)) {
+    startRootWatch(projectRoot, onChange);
   }
 }
 

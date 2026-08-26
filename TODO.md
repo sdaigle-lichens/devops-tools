@@ -4,40 +4,6 @@ Next steps for DevOps Tools, roughly in the order I would do them. Everything he
 something observed while building the thing — a measurement, a screenshot, or a gap the code
 comments already admit to. Where a claim was verified, the evidence is named.
 
----
-
-## 1. Bugs
-
-### The first board a project ever gets does not reach an open window — **measured**
-
-The empty state says, in `board-placeholders.tsx`:
-
-> The canvas picks it up as soon as the file lands — no need to reopen the project.
-
-That is false for exactly the case the screen is shown in. `board-watcher.ts` watches the
-`.claude/` **directory**, and when the directory does not exist yet `fs.watch` throws and the
-watcher is set to `null` — no watch, no retry. A project with no `.claude/` is precisely a project
-that has never run the init skill, so the promise breaks on the primary onboarding path: open an
-unmapped project, run `/devops-tools:init-devops-tools`, watch nothing happen.
-
-Verified with a probe against the packaged build: open a project with `infra/main.tf` and no
-`.claude/`, wait for "No board yet", then `mkdir .claude` and write the board. The canvas never
-appeared within 8s. The existing live-reload check in `probe.mjs` passes only because its `mapped`
-fixture already has a `.claude/` directory.
-
-Fix: watch the project root for the creation of `.claude/`, then hand off to the existing
-directory watch — or watch the root recursively and filter. Whatever the approach, it needs a
-probe case built on a project with **no** `.claude/`, since that is the hole the current suite has.
-
-### Edge labels collide with nodes
-
-Visible in the canvas screenshots: the `0.0.0.0/0, ::/0` label on the route-table → IGW edge
-renders half-behind the route table node and reads as `0.0/0`. `labelBgStyle` is set in
-`board-to-flow.ts` but does not lift the label clear of node geometry, because React Flow places it
-at the path midpoint regardless of what is there.
-
----
-
 ## 2. Highest value next
 
 ### Run the skills against real Terraform, end to end
