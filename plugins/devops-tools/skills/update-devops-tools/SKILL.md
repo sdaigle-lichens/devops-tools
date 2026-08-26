@@ -8,8 +8,8 @@ description: "Brings .claude/devops-tools.json back in step with a Terraform cha
 Re-derive `.claude/devops-tools.json` from the current Terraform **as a diff**, not from scratch.
 
 ```
-read existing board → read terraform → diff the resource sets
-                   → carry forward labels/notes → layout → validate → report the change
+check the board's layout matches the project's shape → read existing board → read terraform
+    → diff the resource sets → carry forward labels/notes → layout → validate → report the change
 ```
 
 The existing board carries decisions worth keeping: labels a human corrected, `notes` explaining
@@ -30,16 +30,40 @@ containment rules.
 **If neither `.claude/devops-tools.json` nor `.claude/devops-tools/` exists**, run
 `/devops-tools:init-devops-tools` instead.
 
-**If the project now has more than one environment and only the single file exists** (or vice
-versa), see [Migrating the layout](#migrating-the-layout) below before doing anything else.
+**If you delegate any part of this workflow to a subagent**, its task prompt must say to read this
+file, or must include Step 1 below verbatim — a subagent given a shortened prompt like "diff-update
+the board" has no way to know a migration check exists at all, and will happily keep a
+three-environment project on one merged board forever.
 
 ## Workflow
 
-Everything below describes updating **one** board. Run it once per file when the project has more
-than one environment (`.claude/devops-tools/<id>.json` for each) — each is independent, so a
-change to `bxl-dev`'s tfvars only touches `bxl-dev.json`.
+Everything from Step 2 on describes updating **one** board. Run it once per file when the project
+has more than one environment (`.claude/devops-tools/<id>.json` for each) — each is independent, so
+a change to `bxl-dev`'s tfvars only touches `bxl-dev.json`.
 
-### 1. Read the existing board, then the Terraform
+### 1. Check the board is in the right layout — every run, not just when something changed
+
+```bash
+ls terraform/env/*.tfvars environments/*.tfvars 2>/dev/null   # or wherever this project keeps them
+ls .claude/devops-tools.json .claude/devops-tools/ 2>/dev/null
+```
+
+Compare what the project **currently** has against what the board **currently** is:
+
+- More than one environment (several `*.tfvars` files, or more than one independent root module)
+  but only the single `.claude/devops-tools.json` exists → **stop.** This run is a migration, not
+  an update. Go to [Migrating the layout](#migrating-the-layout) and do not come back to Step 2.
+- Exactly one environment but `.claude/devops-tools/` exists with boards in it → same: stop, go
+  migrate down to the single file.
+- Otherwise, the layout already matches — continue to Step 2.
+
+**Do not condition this on whether the mismatch is new.** There is no way to tell "a second
+environment just appeared" from "this project has had three `.tfvars` files since before this
+skill supported more than one" — the board is a snapshot, not a history. A project can fail this
+check the first time `update-devops-tools` runs after this feature shipped, for tfvars files that
+have existed for years. Treat every mismatch the same: fix it now.
+
+### 2. Read the existing board, then the Terraform
 
 Read the board first, so you know what the previous pass decided before the Terraform can bias
 you. Then read every `.tf` under `project.terraformRoot`, plus any local module it calls.
@@ -54,7 +78,7 @@ If the board fails to parse at all — the app reported it invalid, or `JSON.par
 and rebuild from the Terraform following `init-devops-tools`'s workflow. Salvage any `notes` and
 `label` values you can still read out of the broken file.
 
-### 2. Diff the resource sets
+### 3. Diff the resource sets
 
 Build the current set of Terraform addresses (expanding `for_each`/`count` the same way
 `reference/schema.md` describes) and compare it against the board's `nodes[].id` plus
@@ -69,7 +93,7 @@ Build the current set of Terraform addresses (expanding `for_each`/`count` the s
   `folded` entry that referenced it. **Do not leave a dangling reference** — the validator will
   reject the file, and it is the single most common way this skill produces a broken board.
 
-### 3. Re-check the things that move underneath you
+### 4. Re-check the things that move underneath you
 
 Some properties are derived rather than declared, and a change elsewhere silently invalidates them:
 
@@ -81,7 +105,7 @@ Some properties are derived rather than declared, and a change elsewhere silentl
 - **`source.line`.** Line numbers drift with every edit above them. Refresh them, or drop the
   `line` field rather than leave it pointing at the wrong place.
 
-### 4. Lay out and validate
+### 5. Lay out and validate
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/layout-board.mjs" <path>
@@ -95,7 +119,7 @@ box that moved means a resource actually moved.
 **If the validator fails, fix it and re-run both.** A dangling edge or `folded.into` after a
 removal is the usual cause.
 
-### 5. Report the change, not the file
+### 6. Report the change, not the file
 
 The user already knows what their architecture looks like. What they want from you is what moved:
 
@@ -113,9 +137,11 @@ If nothing changed, say exactly that and confirm the diff is empty.
 A project can move between "one environment" and "several" over time. Handle it explicitly rather
 than silently:
 
-- **A second environment just appeared** (a new `*.tfvars` file, or a new root module) and the
-  project still has a single `.claude/devops-tools.json`: tell the user, confirm you should switch
-  to `.claude/devops-tools/<id>.json` per environment, build each board following
+- **More than one environment exists** (several `*.tfvars` files, or more than one independent
+  root module) **but the board is still the single `.claude/devops-tools.json`** — whether that
+  second environment just appeared or has been there all along and simply predates this skill
+  supporting more than one: tell the user, confirm you should switch to
+  `.claude/devops-tools/<id>.json` per environment, build each board following
   `init-devops-tools`'s workflow (carrying forward whatever the existing single file already got
   right for the environment it matches), and ask before deleting the old single file — leaving
   both around gives the app two disagreeing sources for one project.
