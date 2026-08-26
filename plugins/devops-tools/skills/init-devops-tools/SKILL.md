@@ -34,6 +34,19 @@ over.
 
 ## Workflow
 
+Check whether your environment offers task-tracking tools (`TaskCreate`/`TaskUpdate` or similar). If
+so, create one item per numbered step below and mark each done as you go — cheap insurance against
+silently dropping one, on top of never delegating this workflow without carrying the step list
+itself.
+
+**If they are not available, say so before proceeding rather than quietly working around it.**
+These tools are known to intermittently fail to register even when they should be
+([anthropics/claude-code#80401](https://github.com/anthropics/claude-code/issues/80401)) — that is
+a session-level gap, not something this skill caused or can fix. Tell the user plainly that the
+checklist safety net is unavailable this session, and ask whether to proceed anyway (working the
+numbered steps in order without it) or stop here and restart their session in case the tools
+reconnect. Don't decide this for them and don't bury it in other output.
+
 ### 1. Find the Terraform
 
 ```bash

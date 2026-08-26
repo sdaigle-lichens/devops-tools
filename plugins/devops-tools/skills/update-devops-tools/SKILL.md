@@ -41,6 +41,21 @@ Everything from Step 2 on describes updating **one** board. Run it once per file
 has more than one environment (`.claude/devops-tools/<id>.json` for each) — each is independent, so
 a change to `bxl-dev`'s tfvars only touches `bxl-dev.json`.
 
+Check whether your environment offers task-tracking tools (`TaskCreate`/`TaskUpdate` or similar). If
+so, create one item per numbered step below — Step 1 especially — and mark each done as you go.
+This is a second, independent layer on top of the note above about delegation: a checklist only
+helps if the step was in the prompt to begin with, but for the agent actually doing the work it is
+real insurance against reading past a step it did see.
+
+**If they are not available, say so before proceeding rather than quietly working around it.**
+These tools are known to intermittently fail to register even when they should be
+([anthropics/claude-code#80401](https://github.com/anthropics/claude-code/issues/80401)) — that is
+a session-level gap, not something this skill caused or can fix. Tell the user plainly that the
+checklist safety net is unavailable this session, and ask whether to proceed anyway (working the
+numbered steps in order without it — Step 1's migration check does not depend on it and must still
+happen) or stop here and restart their session in case the tools reconnect. Don't decide this for
+them and don't bury it in other output.
+
 ### 1. Check the board is in the right layout — every run, not just when something changed
 
 ```bash
